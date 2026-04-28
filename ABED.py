@@ -5,13 +5,15 @@ import uuid
 # ---------- AWS Bedrock Runtime Client ----------
 bedrock_agent_runtime = boto3.client(
     service_name="bedrock-agent-runtime",
-    region_name="us-east-1"  # Change based on your agent's region
+    region_name=st.secrets["AWS_DEFAULT_REGION"],
+    aws_access_key_id=st.secrets["AWS_ACCESS_KEY_ID"],
+    aws_secret_access_key=st.secrets["AWS_SECRET_ACCESS_KEY"]
 )
 
 # ---------- Agent Config ----------
-AGENT_ID = "GCW6LPVJWR"
-AGENT_ALIAS_ID = "TZ5WSFNJYH"
-SESSION_ID = str(uuid.uuid4())  # New session for each run
+AGENT_ID = st.secrets["AGENT_ID"]
+AGENT_ALIAS_ID = st.secrets["AGENT_ALIAS_ID"]
+SESSION_ID = str(uuid.uuid4())
 
 # ---------- Streamlit UI ----------
 st.set_page_config(page_title="ABED Chat")
