@@ -1,49 +1,68 @@
 import streamlit as st
-import boto3
-import uuid
+import requests
 
-# ---------- AWS Bedrock Runtime Client ----------
-bedrock_agent_runtime = boto3.client(
-    service_name="bedrock-agent-runtime",
-    region_name=st.secrets["AWS_DEFAULT_REGION"],
-    aws_access_key_id=st.secrets["AWS_ACCESS_KEY_ID"],
-    aws_secret_access_key=st.secrets["AWS_SECRET_ACCESS_KEY"]
-)
-
-# ---------- Agent Config ----------
-AGENT_ID = st.secrets["AGENT_ID"]
-AGENT_ALIAS_ID = st.secrets["AGENT_ALIAS_ID"]
-SESSION_ID = str(uuid.uuid4())
+# ---------- API Config ----------
+API_ENDPOINT = "https://16psxb3erf.execute-api.us-east-1.amazonaws.com/chat"
 
 # ---------- Streamlit UI ----------
-st.set_page_config(page_title="ABED Chat")
-st.title("🤖 Chat ABED")
-st.markdown("Ask me anything about Cybersecurity")
+st.set_page_config(page_title="ABED Chat", page_icon="🛡️")
+st.title("🛡️ ABED - A Bot Excelling Daily")
+st.markdown("**AI-Powered Red Team & Security Analysis Assistant**")
+st.markdown("Ask me about vulnerabilities, CVEs, attack paths, or paste in environment data for analysis.")
 
-user_input = st.text_input("Your question:", placeholder="Ask a question...")
+# Initialize chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-if st.button("Send") and user_input.strip():
-    try:
-        # Create an empty placeholder for streaming text
-        output_area = st.empty()
-        streamed_text = ""
+# Display chat history
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-        # Invoke agent with streaming response
-        response = bedrock_agent_runtime.invoke_agent(
-            agentId=AGENT_ID,
-            agentAliasId=AGENT_ALIAS_ID,
-            sessionId=SESSION_ID,
-            inputText=user_input
-        )
+# Chat input
+if prompt := st.chat_input("Ask a security question or paste environment data..."):
+    # Add user message to history
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-        for event in response["completion"]:
-            if "chunk" in event:
-                chunk_text = event["chunk"]["bytes"].decode("utf-8")
-                streamed_text += chunk_text
-                output_area.markdown(f"**Agent:** {streamed_text}▌")
+    # Call API
+    with st.chat_message("assistant"):
+        with st.spinner("ABED is analyzing..."):
+            try:
+                response = requests.post(
+                    API_ENDPOINT,
+                    json={"query": prompt},
+                    headers={"Content-Type": "application/json"},
+                    timeout=60
+                )
 
-        # Final update (remove cursor)
-        output_area.markdown(f"**Agent:** {streamed_text}")
+                if response.status_code == 200:
+                    data = response.json()
+                    answer = data.get("response", "No response received.")
+                    sources = data.get("sources", [])
+                    num_articles = data.get("num_articles_used", 0)
 
-    except Exception as e:
-        st.error(f"Error: {e}")
+                    st.markdown(answer)
+
+                    if sources:
+                        with st.expander(f" Intelligence Sources Used ({num_articles} articles)"):
+                            for source in sources:
+                                st.markdown(f"- `{source}`")
+
+                    st.session_state.messages.append({"role": "assistant", "content": answer})
+
+                else:
+                    error_msg = f"API error: {response.status_code} - {response.text}"
+                    st.error(error_msg)
+                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
+
+            except requests.exceptions.Timeout:
+                msg = "Request timed out. ABED is still processing, try again in a moment."
+                st.error(msg)
+                st.session_state.messages.append({"role": "assistant", "content": msg})
+
+            except Exception as e:
+                msg = f"Error: {e}"
+                st.error(msg)
+                st.session_state.messages.append({"role": "assistant", "content": msg})
